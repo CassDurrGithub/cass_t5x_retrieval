@@ -215,6 +215,7 @@ class DualEncoderModel(DualEncoderBase):
       dropout_rng: Optional[jnp.ndarray] = None
   ) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     """Computes logits via a forward pass of `self.module_cls`."""
+    print("In DualEncoderModel._compute_logits")
     # Dropout is provided only for the training mode.
     rngs = {'dropout': dropout_rng} if dropout_rng is not None else None
 
@@ -298,6 +299,10 @@ class DualEncoderModel(DualEncoderBase):
       right_logits = (
           right_logits - self._logit_margin * jnp.eye(right_logits.shape[0]))
 
+    print("Shape of left_encodings", left_encodings.shape)
+    print("Shape of right_encodings", right_encodings.shape)
+    print("Shape of left_logits", left_logits.shape)
+    print("Shape of right_logits", right_logits.shape)
     return left_encodings, right_encodings, left_logits, right_logits
 
   def _compute_loss(
@@ -319,6 +324,7 @@ class DualEncoderModel(DualEncoderBase):
       loss: (bi-directional) batch cross-entropy loss.
       weight_sum: global batch size.
     """
+    print("DualEncoderModel._compute_loss")
     # targets: [batch, 1] -> [batch, batch]
     left_loss = utils.in_batch_cross_entropy(left_logits)
     right_loss = utils.in_batch_cross_entropy(right_logits)
@@ -337,6 +343,7 @@ class DualEncoderModel(DualEncoderBase):
       uniform_loss: Optional[jnp.ndarray] = None,
   ) -> metrics_lib.MetricsMap:
     """Compute metrics given the logits, targets and loss."""
+    print("In DualEncoderModel._compute_metrics")
     metrics = t5x_models.compute_base_metrics(
         logits=left_logits,
         targets=utils.sparse_labels_for_in_batch_cross_entropy(left_logits),
@@ -367,13 +374,16 @@ class DualEncoderModel(DualEncoderBase):
       dropout_rng: Optional[jnp.ndarray],
   ) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """Loss function used for training with a cross-entropy loss."""
-
+    print("In DualEncoderModel.loss_fn")
+    print("Batch:", batch)
+    print("Batch keys", batch.keys())
     left_encodings, right_encodings, left_logits, right_logits = self._compute_logits(
         params, batch, dropout_rng)
     # z_loss is already added to loss, which is a workaround for the numerical
     # instability issue.
     loss, z_loss, weight_sum = self._compute_loss(batch, left_logits,
                                                   right_logits)
+    print("Shape of loss", loss.shape)
     if self._use_align_uniform:
       align_loss = utils.compute_align_loss(left_encodings, right_encodings)
       uniform_loss = utils.compute_uniform_loss(
