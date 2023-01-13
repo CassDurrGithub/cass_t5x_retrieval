@@ -213,7 +213,7 @@ class DualEncoderModel(DualEncoderBase):
       params: Mapping[str, Any],
       batch: Mapping[str, jnp.ndarray],
       dropout_rng: Optional[jnp.ndarray] = None
-  ) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+  ) -> Union[Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray], Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]]:
     """Computes logits via a forward pass of `self.module_cls`."""
     print("In DualEncoderModel._compute_logits")
     # Dropout is provided only for the training mode.
@@ -231,8 +231,16 @@ class DualEncoderModel(DualEncoderBase):
 
     if self._use_negatives:
       left_tokens = batch['left_encoder_input_tokens']
+      print("left_tokens: ", left_tokens)
+      print("left_tokens type: ", type(left_tokens))
+      with jax.disable_jit() :
+        print(left_tokens)
       right_positive_tokens = batch['right_encoder_input_tokens']
+      print("right_positive_tokens: ", right_positive_tokens)
+      print("right_positive_tokens type: ", type(right_positive_tokens))
       right_negative_tokens = batch['right_negative_encoder_input_tokens']
+      print("right_negative_tokens: ", right_negative_tokens)
+      print("right_negative_tokens type: ", type(right_negative_tokens))
 
       # left/right_encoder_input_tokens should be 2d tensor.
       assert left_tokens.ndim == 2
@@ -244,10 +252,12 @@ class DualEncoderModel(DualEncoderBase):
 
       # All tensors should have the same batch size.
       batch_size = right_positive_tokens.shape[0]
+      print("Batch size: ", batch_size)
       assert left_tokens.shape[0] == batch_size
       assert right_negative_tokens.shape[0] == batch_size
 
       if right_negative_tokens.ndim == 3:
+        print("right_negative_tokens.ndim == 3:")
         # We have multiple negatives, so need to reshape the
         # right_negative_encoder_input_tokens.
 
@@ -260,7 +270,7 @@ class DualEncoderModel(DualEncoderBase):
             right_negative_tokens,
             (batch_size * num_negatives, right_seq_length))
 
-      (left_encodings, right_encodings,
+      (left_encodings, right_encodings, right_negative_encodings,
        logits), _ = self.module.apply({'params': params},
                                       left_tokens,
                                       right_positive_tokens,
@@ -303,7 +313,11 @@ class DualEncoderModel(DualEncoderBase):
     print("Shape of right_encodings", right_encodings.shape)
     print("Shape of left_logits", left_logits.shape)
     print("Shape of right_logits", right_logits.shape)
-    return left_encodings, right_encodings, left_logits, right_logits
+    if self._use_negatives:
+      print("Shape of right_negative_encodings", right_negative_encodings.shape)
+      return left_encodings, right_encodings, left_logits, right_logits, right_negative_encodings
+    else:
+      return left_encodings, right_encodings, left_logits, right_logits
 
   def _compute_loss(
       self,
@@ -316,9 +330,9 @@ class DualEncoderModel(DualEncoderBase):
     Args:
       batch: a batch of inputs.
       left_logits: array of shape (global_batch_size, global_batch_size) that
-        represents the scaled dot product of the left tower.
+        represents the scaled dot product of the left tower. Cassandra note: this is the output from the similarity layer [B, B].
       right_logits: array of shape (global_batch_size, global_batch_size) that
-        represents the scaled dot product of the right tower.
+        represents the scaled dot product of the right tower. Cassandra note: this is the output from the similarity layer [B, B].
 
     Returns:
       loss: (bi-directional) batch cross-entropy loss.
