@@ -315,7 +315,7 @@ class DualEncoderModel(DualEncoderBase):
     print("Shape of right_logits", right_logits.shape)
     if self._use_negatives:
       print("Shape of right_negative_encodings", right_negative_encodings.shape)
-      return left_encodings, right_encodings, left_logits, right_logits, right_negative_encodings
+      return left_encodings, right_encodings, right_negative_encodings, left_logits, right_logits
     else:
       return left_encodings, right_encodings, left_logits, right_logits
 
@@ -391,8 +391,10 @@ class DualEncoderModel(DualEncoderBase):
     print("In DualEncoderModel.loss_fn")
     print("Batch:", batch)
     print("Batch keys", batch.keys())
-    left_encodings, right_encodings, left_logits, right_logits = self._compute_logits(
-        params, batch, dropout_rng)
+    if self._use_negatives:
+      left_encodings, right_encodings, right_negative_encodings, left_logits, right_logits = self._compute_logits(params, batch, dropout_rng)
+    else :
+      left_encodings, right_encodings, left_logits, right_logits = self._compute_logits(params, batch, dropout_rng)
     # z_loss is already added to loss, which is a workaround for the numerical
     # instability issue.
     loss, z_loss, weight_sum = self._compute_loss(batch, left_logits,
